@@ -1,0 +1,31 @@
+# Binaries
+bin/
+*.exe
+
+# Go build cache
+*.test
+*.out
+
+# Dependency vendor (if used)
+vendor/
+
+# Config with real credentials (never commit)
+configs/autoscaler.local.yaml
+
+# SQLite database
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo

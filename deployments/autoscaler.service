@@ -1,0 +1,14 @@
+[Unit]
+Description=Proxmox LXC Autoscaler
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/proxmox-autoscaler -config /etc/proxmox-autoscaler/autoscaler.yaml
+Restart=on-failure
+RestartSec=10s
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

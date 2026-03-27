@@ -1,0 +1,44 @@
+version: 2
+
+project_name: proxmox-autoscaler
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: proxmox-autoscaler
+    main: ./cmd/autoscaler
+    binary: proxmox-autoscaler
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: proxmox-autoscaler
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - configs/autoscaler.yaml
+      - deployments/proxmox-autoscaler.service
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch

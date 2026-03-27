@@ -1,0 +1,32 @@
+proxmox:
+  host: "https://192.168.1.10:8006"
+  node: "pve"
+  token_id: "autoscaler@pam!monitor"
+  token_secret: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+  insecure_tls: false
+
+monitor:
+  poll_interval: 5s
+  saturation_threshold: 0.95
+  consecutive_samples: 3
+  boost_duration: 2m
+  history_samples: 10
+
+scaling:
+  cpu_resource: "cores"        # "cores" | "cpulimit"
+  primary_boost_factor: 1.5
+  fallback_boost_factor: 1.25
+  exclude_tag: "noautoscale"
+
+notifications:
+  enabled: true
+  mail_binary: "/usr/bin/mail"
+  to: "admin@example.com"
+
+logging:
+  level: "info"
+  format: "text"              # "text" | "json"
+  file: "/var/log/proxmox-autoscaler/autoscaler.log"
+
+storage:
+  db_path: "/var/lib/proxmox-autoscaler/state.db"
