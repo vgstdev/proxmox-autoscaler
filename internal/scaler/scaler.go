@@ -44,17 +44,21 @@ func (s *Scaler) ComputeBoost(ctx context.Context, vmid int, kind string, curren
 	for _, entry := range allLXC {
 		cfg, err := s.client.GetContainerConfig(ctx, entry.VMID)
 		if err != nil {
+			s.logger.Debug("capacity check: skipping container (config error)", "vmid", entry.VMID, "error", err)
 			continue
 		}
+		var alloc float64
 		if kind == "cpu" {
 			if s.cfg.Scaling.CPUResource == "cores" {
-				totalAlloc += float64(cfg.Cores)
+				alloc = float64(cfg.Cores)
 			} else {
-				totalAlloc += cfg.CPULimit
+				alloc = cfg.CPULimit
 			}
 		} else {
-			totalAlloc += float64(cfg.Memory)
+			alloc = float64(cfg.Memory)
 		}
+		s.logger.Debug("capacity check: container allocation", "vmid", entry.VMID, "kind", kind, "alloc", alloc)
+		totalAlloc += alloc
 	}
 
 	// Available host capacity for this resource.
@@ -69,15 +73,34 @@ func (s *Scaler) ComputeBoost(ctx context.Context, vmid int, kind string, curren
 	// Headroom = hostMax - totalAlloc + currentValue (current container's contribution)
 	headroom := hostMax - totalAlloc + currentValue
 
+	s.logger.Debug("capacity check summary",
+		"vmid", vmid,
+		"kind", kind,
+		"host_max", fmt.Sprintf("%.0f", hostMax),
+		"total_alloc", fmt.Sprintf("%.0f", totalAlloc),
+		"current_value", fmt.Sprintf("%.0f", currentValue),
+		"headroom", fmt.Sprintf("%.0f", headroom),
+	)
+
 	for _, factor := range []float64{s.cfg.Scaling.PrimaryBoostFactor, s.cfg.Scaling.FallbackBoostFactor} {
 		candidate := applyFactor(kind, s.cfg.Scaling.CPUResource, currentValue, factor)
-		if candidate-currentValue <= headroom+0.01 {
+		delta := candidate - currentValue
+		s.logger.Debug("capacity check: testing factor",
+			"vmid", vmid,
+			"kind", kind,
+			"factor", factor,
+			"candidate", fmt.Sprintf("%.0f", candidate),
+			"delta_needed", fmt.Sprintf("%.0f", delta),
+			"headroom", fmt.Sprintf("%.0f", headroom),
+			"fits", delta <= headroom+0.01,
+		)
+		if delta <= headroom+0.01 {
 			return candidate, factor, nil
 		}
 	}
 
-	return 0, 0, fmt.Errorf("no boost factor fits within host capacity (headroom=%.2f, primary_factor=%.2f, fallback_factor=%.2f)",
-		headroom, s.cfg.Scaling.PrimaryBoostFactor, s.cfg.Scaling.FallbackBoostFactor)
+	return 0, 0, fmt.Errorf("no boost factor fits within host capacity (host_max=%.0f, total_alloc=%.0f, current=%.0f, headroom=%.0f)",
+		hostMax, totalAlloc, currentValue, headroom)
 }
 
 // ApplyBoost sends the boosted value to Proxmox.
