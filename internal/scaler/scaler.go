@@ -60,10 +60,10 @@ func (s *Scaler) ComputeBoost(ctx context.Context, vmid int, kind string, curren
 	// Available host capacity for this resource.
 	var hostMax float64
 	if kind == "cpu" {
-		hostMax = float64(nodeStatus.MaxCPU)
+		hostMax = float64(nodeStatus.MaxCPU())
 	} else {
-		// nodeStatus.MaxMem is in bytes; convert to MB.
-		hostMax = nodeStatus.MaxMem / (1024 * 1024)
+		// MaxMemBytes is in bytes; convert to MB.
+		hostMax = nodeStatus.MaxMemBytes() / (1024 * 1024)
 	}
 
 	// Headroom = hostMax - totalAlloc + currentValue (current container's contribution)

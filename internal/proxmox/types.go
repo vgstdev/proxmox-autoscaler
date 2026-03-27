@@ -37,12 +37,23 @@ type ContainerConfig struct {
 
 // NodeStatus represents the node-level stats from
 // GET /nodes/{node}/status.
+// Note: Proxmox nests CPU count inside cpuinfo and memory inside memory.
 type NodeStatus struct {
-	MaxCPU int     `json:"maxcpu"`
-	MaxMem float64 `json:"maxmem"`
-	CPU    float64 `json:"cpu"`
-	Mem    float64 `json:"mem"`
+	CPU     float64 `json:"cpu"`
+	CPUInfo struct {
+		CPUs int `json:"cpus"`
+	} `json:"cpuinfo"`
+	Memory struct {
+		Total float64 `json:"total"` // bytes
+		Used  float64 `json:"used"`  // bytes
+	} `json:"memory"`
 }
+
+// MaxCPU returns the total number of logical CPUs on the node.
+func (n *NodeStatus) MaxCPU() int { return n.CPUInfo.CPUs }
+
+// MaxMemBytes returns the total memory of the node in bytes.
+func (n *NodeStatus) MaxMemBytes() float64 { return n.Memory.Total }
 
 // ConfigUpdateRequest holds the fields to update via PUT /nodes/{node}/lxc/{vmid}/config.
 // Only non-zero fields will be sent.

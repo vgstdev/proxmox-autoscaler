@@ -217,12 +217,33 @@ func (m *Monitor) evaluateCPU(
 		return
 	}
 
+	// cores=0 means Proxmox is using its default (all host CPUs visible to the container).
+	// Fall back to status.CPUs which reflects the actual visible CPU count.
+	if m.cfg.Scaling.CPUResource == "cores" && cfg.Cores == 0 {
+		if !state.CPU.warnedUnlimited {
+			state.CPU.warnedUnlimited = true
+			m.logger.Warn("cores=0 on container config, falling back to status.CPUs for saturation check", "vmid", state.VMID, "status_cpus", status.CPUs)
+		}
+		allocatedCPU = status.CPUs
+	}
+
 	if allocatedCPU <= 0 {
+		m.logger.Warn("could not determine allocated CPU for container, skipping check", "vmid", state.VMID)
 		return
 	}
 
 	// CPU saturation: (status.CPU * hostMaxCPU) / containerAllocatedCores
-	cpuUsage := (status.CPU * float64(node.MaxCPU)) / allocatedCPU
+	// status.CPU is the fraction of total host CPU in use by this container.
+	cpuUsage := (status.CPU * float64(node.MaxCPU())) / allocatedCPU
+
+	m.logger.Debug("cpu saturation sample",
+		"vmid", state.VMID,
+		"status_cpu", status.CPU,
+		"host_maxcpu", node.MaxCPU(),
+		"allocated_cpu", allocatedCPU,
+		"cpu_usage_fraction", fmt.Sprintf("%.4f", cpuUsage),
+		"saturated_count", rs.SaturatedCount,
+	)
 
 	rs.addHistory(cpuUsage, m.cfg.Monitor.HistorySamples)
 
@@ -261,6 +282,14 @@ func (m *Monitor) evaluateMemory(
 	}
 
 	memUsage := status.Mem / status.MaxMem
+
+	m.logger.Debug("memory saturation sample",
+		"vmid", state.VMID,
+		"mem_used_bytes", status.Mem,
+		"mem_max_bytes", status.MaxMem,
+		"mem_usage_fraction", fmt.Sprintf("%.4f", memUsage),
+		"saturated_count", rs.SaturatedCount,
+	)
 
 	rs.addHistory(memUsage, m.cfg.Monitor.HistorySamples)
 
@@ -442,7 +471,7 @@ func (m *Monitor) revertBoost(ctx context.Context, state *ContainerState, kind R
 				alloc = currentCfg.CPULimit
 			}
 			if alloc > 0 {
-				currentUsagePct = (currentStatus.CPU * float64(nodeStatus.MaxCPU)) / alloc * 100
+				currentUsagePct = (currentStatus.CPU * float64(nodeStatus.MaxCPU())) / alloc * 100
 			}
 		} else {
 			if currentStatus.MaxMem > 0 {

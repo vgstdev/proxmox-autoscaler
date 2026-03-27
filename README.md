@@ -48,6 +48,31 @@ Every 5 seconds (configurable):
 
 ## Installation
 
+### Automated deployment script (recommended)
+
+The `scripts/deploy.sh` script handles the full installation, update, and uninstall lifecycle:
+
+```bash
+# Download and run directly on the target machine
+curl -fsSL https://raw.githubusercontent.com/vguerrero/proxmox-autoscaler/main/scripts/deploy.sh | sudo bash
+
+# Or clone first and run locally
+sudo ./scripts/deploy.sh             # install latest release
+sudo ./scripts/deploy.sh v1.2.0      # install specific version
+sudo ./scripts/deploy.sh --force     # reinstall current version
+sudo ./scripts/deploy.sh --uninstall # remove everything
+```
+
+The script will:
+- Detect the host architecture (amd64 / arm64) automatically
+- Download the correct binary from the GitHub release
+- Create all required directories
+- Install the systemd service and enable it
+- **Never overwrite an existing config** — saves the new example as `autoscaler.yaml.new` instead
+- On update: stop the service first (triggering a graceful revert of active boosts), replace the binary, and restart
+
+### Manual installation
+
 The service communicates with Proxmox exclusively through its REST API, so it can be installed in two ways:
 
 - **On the Proxmox host itself** — simplest setup, no firewall rules needed.
