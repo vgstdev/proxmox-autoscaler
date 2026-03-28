@@ -163,16 +163,16 @@ do_install() {
   if [[ -f "$CONFIG_FILE" ]]; then
     warn "Config already exists at ${CONFIG_FILE} — not overwritten"
     info  "New example config saved at ${CONFIG_FILE}.new — diff and merge manually if needed"
-    install -m 0640 "${tmpdir}/autoscaler.yaml" "${CONFIG_FILE}.new"
+    install -m 0640 "${tmpdir}/configs/autoscaler.yaml" "${CONFIG_FILE}.new"
   else
-    install -m 0640 "${tmpdir}/autoscaler.yaml" "$CONFIG_FILE"
+    install -m 0640 "${tmpdir}/configs/autoscaler.yaml" "$CONFIG_FILE"
     success "Config installed at ${CONFIG_FILE}"
     warn "Edit ${CONFIG_FILE} with your Proxmox credentials before starting the service"
   fi
 
   # ── Systemd service ─────────────────────────────────────────────────────────
   step "Installing systemd service"
-  install -m 0644 "${tmpdir}/proxmox-autoscaler.service" "$SERVICE_FILE"
+  install -m 0644 "${tmpdir}/deployments/proxmox-autoscaler.service" "$SERVICE_FILE"
   systemctl daemon-reload
   success "Service unit installed at ${SERVICE_FILE}"
 
