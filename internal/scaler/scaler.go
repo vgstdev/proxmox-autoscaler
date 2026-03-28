@@ -28,7 +28,18 @@ func New(client *proxmox.Client, cfg *config.Config, logger *slog.Logger) *Scale
 // ComputeBoost calculates the boosted value for a resource, checking host capacity.
 // kind must be "cpu" or "memory".
 // Returns the boosted value and the factor used, or an error if no boost fits.
+//
+// CPU capacity is NOT checked: Proxmox uses the CFS scheduler and allows CPU
+// overprovisioning by design — cores/cpulimit are soft visibility limits, not
+// hard reservations. Only RAM requires a hard capacity check.
 func (s *Scaler) ComputeBoost(ctx context.Context, vmid int, kind string, currentValue float64) (float64, float64, error) {
+	if kind == "cpu" {
+		// CPU overprovisioning is normal in Proxmox — no capacity check needed.
+		candidate := applyFactor(kind, s.cfg.Scaling.CPUResource, currentValue, s.cfg.Scaling.PrimaryBoostFactor)
+		return candidate, s.cfg.Scaling.PrimaryBoostFactor, nil
+	}
+
+	// Memory: hard reservation — check available headroom before boosting.
 	nodeStatus, err := s.client.GetNodeStatus(ctx)
 	if err != nil {
 		return 0, 0, fmt.Errorf("get node status: %w", err)
@@ -39,7 +50,6 @@ func (s *Scaler) ComputeBoost(ctx context.Context, vmid int, kind string, curren
 		return 0, 0, fmt.Errorf("list all lxc: %w", err)
 	}
 
-	// Sum total allocations across all containers.
 	var totalAlloc float64
 	for _, entry := range allLXC {
 		cfg, err := s.client.GetContainerConfig(ctx, entry.VMID)
@@ -47,39 +57,20 @@ func (s *Scaler) ComputeBoost(ctx context.Context, vmid int, kind string, curren
 			s.logger.Debug("capacity check: skipping container (config error)", "vmid", entry.VMID, "error", err)
 			continue
 		}
-		var alloc float64
-		if kind == "cpu" {
-			if s.cfg.Scaling.CPUResource == "cores" {
-				alloc = float64(cfg.Cores)
-			} else {
-				alloc = cfg.CPULimit
-			}
-		} else {
-			alloc = float64(cfg.Memory)
-		}
-		s.logger.Debug("capacity check: container allocation", "vmid", entry.VMID, "kind", kind, "alloc", alloc)
-		totalAlloc += alloc
+		s.logger.Debug("capacity check: container allocation", "vmid", entry.VMID, "kind", kind, "alloc_mb", cfg.Memory)
+		totalAlloc += float64(cfg.Memory)
 	}
 
-	// Available host capacity for this resource.
-	var hostMax float64
-	if kind == "cpu" {
-		hostMax = float64(nodeStatus.MaxCPU())
-	} else {
-		// MaxMemBytes is in bytes; convert to MB.
-		hostMax = nodeStatus.MaxMemBytes() / (1024 * 1024)
-	}
-
-	// Headroom = hostMax - totalAlloc + currentValue (current container's contribution)
+	// MaxMemBytes is in bytes; convert to MB.
+	hostMax := nodeStatus.MaxMemBytes() / (1024 * 1024)
 	headroom := hostMax - totalAlloc + currentValue
 
 	s.logger.Debug("capacity check summary",
 		"vmid", vmid,
-		"kind", kind,
-		"host_max", fmt.Sprintf("%.0f", hostMax),
-		"total_alloc", fmt.Sprintf("%.0f", totalAlloc),
-		"current_value", fmt.Sprintf("%.0f", currentValue),
-		"headroom", fmt.Sprintf("%.0f", headroom),
+		"host_max_mb", fmt.Sprintf("%.0f", hostMax),
+		"total_alloc_mb", fmt.Sprintf("%.0f", totalAlloc),
+		"current_mb", fmt.Sprintf("%.0f", currentValue),
+		"headroom_mb", fmt.Sprintf("%.0f", headroom),
 	)
 
 	for _, factor := range []float64{s.cfg.Scaling.PrimaryBoostFactor, s.cfg.Scaling.FallbackBoostFactor} {
@@ -87,11 +78,10 @@ func (s *Scaler) ComputeBoost(ctx context.Context, vmid int, kind string, curren
 		delta := candidate - currentValue
 		s.logger.Debug("capacity check: testing factor",
 			"vmid", vmid,
-			"kind", kind,
 			"factor", factor,
-			"candidate", fmt.Sprintf("%.0f", candidate),
-			"delta_needed", fmt.Sprintf("%.0f", delta),
-			"headroom", fmt.Sprintf("%.0f", headroom),
+			"candidate_mb", fmt.Sprintf("%.0f", candidate),
+			"delta_mb", fmt.Sprintf("%.0f", delta),
+			"headroom_mb", fmt.Sprintf("%.0f", headroom),
 			"fits", delta <= headroom+0.01,
 		)
 		if delta <= headroom+0.01 {
@@ -99,7 +89,7 @@ func (s *Scaler) ComputeBoost(ctx context.Context, vmid int, kind string, curren
 		}
 	}
 
-	return 0, 0, fmt.Errorf("no boost factor fits within host capacity (host_max=%.0f, total_alloc=%.0f, current=%.0f, headroom=%.0f)",
+	return 0, 0, fmt.Errorf("no boost factor fits within host memory capacity (host_max=%.0fMB, total_alloc=%.0fMB, current=%.0fMB, headroom=%.0fMB)",
 		hostMax, totalAlloc, currentValue, headroom)
 }
 
