@@ -4,6 +4,12 @@ The Kubernetes Horizontal Pod Autoscaler equivalent for Proxmox — a lightweigh
 
 Because it operates entirely through the Proxmox REST API, it can run directly on the Proxmox host itself or on any external machine that has network access to the API — no agent installation inside the containers is required.
 
+## Why open source?
+
+We believe this is the first open-source autoscaling engine for Proxmox. The Proxmox ecosystem and the broader open-source community provide an enormous number of tools that we rely on every day. This project is our way of giving back — making something genuinely useful available to everyone who builds on top of Proxmox, without restrictions.
+
+If this project saves you time or helps your infrastructure handle load better, consider contributing improvements or spreading the word.
+
 ## Features
 
 - **Independent per-resource scaling** — CPU and RAM are monitored and scaled independently
