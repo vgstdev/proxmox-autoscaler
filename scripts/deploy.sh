@@ -95,11 +95,11 @@ download_and_extract() {
   local tmpdir
   tmpdir="$(mktemp -d)"
 
-  info "Downloading ${archive}..."
+  info "Downloading ${archive}..." >&2
   curl -fsSL --progress-bar "$url" -o "${tmpdir}/${archive}" \
     || error "Download failed. Is version ${version} available? URL: ${url}"
 
-  info "Extracting..."
+  info "Extracting..." >&2
   tar -xzf "${tmpdir}/${archive}" -C "$tmpdir"
 
   echo "$tmpdir"
