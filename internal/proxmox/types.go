@@ -3,6 +3,12 @@
 
 package proxmox
 
+import (
+	"encoding/json"
+	"fmt"
+	"strconv"
+)
+
 // LXCEntry represents a single container returned by GET /nodes/{node}/lxc.
 type LXCEntry struct {
 	VMID   int     `json:"vmid"`
@@ -54,6 +60,42 @@ func (n *NodeStatus) MaxCPU() int { return n.CPUInfo.CPUs }
 
 // MaxMemBytes returns the total memory of the node in bytes.
 func (n *NodeStatus) MaxMemBytes() float64 { return n.Memory.Total }
+
+// UnmarshalJSON handles cpulimit being returned as either a number or a string by Proxmox.
+func (c *ContainerConfig) UnmarshalJSON(b []byte) error {
+	type Alias ContainerConfig
+	aux := &struct {
+		CPULimit json.RawMessage `json:"cpulimit"`
+		*Alias
+	}{
+		Alias: (*Alias)(c),
+	}
+	if err := json.Unmarshal(b, aux); err != nil {
+		return err
+	}
+	if len(aux.CPULimit) == 0 {
+		return nil
+	}
+	var n float64
+	if err := json.Unmarshal(aux.CPULimit, &n); err == nil {
+		c.CPULimit = n
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(aux.CPULimit, &s); err != nil {
+		return fmt.Errorf("cpulimit: %w", err)
+	}
+	if s == "" {
+		c.CPULimit = 0
+		return nil
+	}
+	n, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return fmt.Errorf("cpulimit: %w", err)
+	}
+	c.CPULimit = n
+	return nil
+}
 
 // ConfigUpdateRequest holds the fields to update via PUT /nodes/{node}/lxc/{vmid}/config.
 // Only non-zero fields will be sent.
