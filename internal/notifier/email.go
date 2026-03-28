@@ -85,7 +85,7 @@ func (n *EmailNotifier) SendBoost(p BoostParams) {
 		pctIncrease,
 		p.UsagePct,
 		p.ElapsedSecs,
-		p.BoostDuration.String(),
+		formatDuration(p.BoostDuration),
 		time.Now().UTC().Format(time.RFC3339),
 	)
 
@@ -128,6 +128,29 @@ func shortHostname(h string) string {
 		return h[:idx]
 	}
 	return h
+}
+
+// formatDuration formats a duration as a human-readable string without redundant zero units.
+// Examples: 2m, 5m, 1h30m, 90s.
+func formatDuration(d time.Duration) string {
+	if d == 0 {
+		return "0s"
+	}
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	s := int(d.Seconds()) % 60
+	switch {
+	case h > 0 && m > 0:
+		return fmt.Sprintf("%dh%dm", h, m)
+	case h > 0:
+		return fmt.Sprintf("%dh", h)
+	case m > 0 && s > 0:
+		return fmt.Sprintf("%dm%ds", m, s)
+	case m > 0:
+		return fmt.Sprintf("%dm", m)
+	default:
+		return fmt.Sprintf("%ds", s)
+	}
 }
 
 // send executes the mail binary with the given subject and body.
