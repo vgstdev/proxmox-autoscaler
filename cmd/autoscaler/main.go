@@ -24,7 +24,13 @@ var version = "1.0.0"
 
 func main() {
 	configPath := flag.String("config", "/etc/proxmox-autoscaler/autoscaler.yaml", "path to config file")
+	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println(version)
+		os.Exit(0)
+	}
 
 	// Load config first (before logger so we can configure log output).
 	cfg, err := config.Load(*configPath)

@@ -72,7 +72,7 @@ service_is_enabled() {
 
 get_installed_version() {
   if [[ -x "$INSTALL_BIN" ]]; then
-    "$INSTALL_BIN" --version 2>/dev/null | awk '{print $NF}' || echo "unknown"
+    "$INSTALL_BIN" -version 2>/dev/null || echo "unknown"
   else
     echo "none"
   fi

@@ -20,7 +20,7 @@ builds:
     goamd64:
       - v1
     ldflags:
-      - -s -w -X proxmox-autoscaler/cmd/autoscaler.version={{.Version}}
+      - -s -w -X main.version={{.Version}}
 
 archives:
   - id: proxmox-autoscaler
