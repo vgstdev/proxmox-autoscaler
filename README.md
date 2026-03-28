@@ -35,7 +35,7 @@ Every 5 seconds (configurable):
 
   For each running LXC container (excluding tagged ones):
 
-    CPU saturation  = (status.cpu × host_cores) / container_cores  ≥ 95%
+    CPU saturation  = status.cpu                                    ≥ 95%
     RAM saturation  = mem_used / mem_total                          ≥ 95%
 
     If saturated for 3 consecutive polls (15 s):

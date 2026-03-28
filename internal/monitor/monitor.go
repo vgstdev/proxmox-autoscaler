@@ -232,14 +232,13 @@ func (m *Monitor) evaluateCPU(
 		return
 	}
 
-	// CPU saturation: (status.CPU * hostMaxCPU) / containerAllocatedCores
-	// status.CPU is the fraction of total host CPU in use by this container.
-	cpuUsage := (status.CPU * float64(node.MaxCPU())) / allocatedCPU
+	// CPU saturation: status.CPU is already a fraction of the container's allocated cores
+	// (0.0 = 0%, 1.0 = 100% of allocated). No host-level conversion needed.
+	cpuUsage := status.CPU
 
 	m.logger.Debug("cpu saturation sample",
 		"vmid", state.VMID,
 		"status_cpu", status.CPU,
-		"host_maxcpu", node.MaxCPU(),
 		"allocated_cpu", allocatedCPU,
 		"cpu_usage_fraction", fmt.Sprintf("%.4f", cpuUsage),
 		"saturated_count", rs.SaturatedCount,
