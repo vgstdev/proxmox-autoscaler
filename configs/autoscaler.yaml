@@ -17,6 +17,8 @@ scaling:
   primary_boost_factor: 1.5
   fallback_boost_factor: 1.25
   exclude_tag: "noautoscale"
+  host_cpu_max_threshold: 0.9    # skip CPU boost if host CPU usage >= 90%
+  host_memory_max_threshold: 0.9 # skip memory boost if host memory usage >= 90%
 
 notifications:
   enabled: true

@@ -29,20 +29,25 @@ func New(client *proxmox.Client, cfg *config.Config, logger *slog.Logger) *Scale
 // kind must be "cpu" or "memory".
 // Returns the boosted value and the factor used, or an error if no boost fits.
 //
-// CPU capacity is NOT checked: Proxmox uses the CFS scheduler and allows CPU
-// overprovisioning by design — cores/cpulimit are soft visibility limits, not
-// hard reservations. Only RAM requires a hard capacity check.
+// CPU hard capacity (cores sum vs physical cores) is NOT checked because Proxmox
+// uses the CFS scheduler and allows overprovisioning by design. However, if the
+// host itself is saturated above host_cpu_max_threshold, the boost is skipped —
+// there is no spare CPU time to redistribute.
 func (s *Scaler) ComputeBoost(ctx context.Context, vmid int, kind string, currentValue float64) (float64, float64, error) {
-	if kind == "cpu" {
-		// CPU overprovisioning is normal in Proxmox — no capacity check needed.
-		candidate := applyFactor(kind, s.cfg.Scaling.CPUResource, currentValue, s.cfg.Scaling.PrimaryBoostFactor)
-		return candidate, s.cfg.Scaling.PrimaryBoostFactor, nil
-	}
-
-	// Memory: hard reservation — check available headroom before boosting.
 	nodeStatus, err := s.client.GetNodeStatus(ctx)
 	if err != nil {
 		return 0, 0, fmt.Errorf("get node status: %w", err)
+	}
+
+	// Check host-level saturation regardless of resource type.
+	if kind == "cpu" {
+		if nodeStatus.CPU >= s.cfg.Scaling.HostCPUMaxThreshold {
+			return 0, 0, fmt.Errorf("host CPU saturated (%.0f%% >= threshold %.0f%%) — no spare CPU time to redistribute",
+				nodeStatus.CPU*100, s.cfg.Scaling.HostCPUMaxThreshold*100)
+		}
+		// CPU overprovisioning is normal in Proxmox — no hard core count check needed.
+		candidate := applyFactor(kind, s.cfg.Scaling.CPUResource, currentValue, s.cfg.Scaling.PrimaryBoostFactor)
+		return candidate, s.cfg.Scaling.PrimaryBoostFactor, nil
 	}
 
 	allLXC, err := s.client.ListAllLXC(ctx)
@@ -61,8 +66,15 @@ func (s *Scaler) ComputeBoost(ctx context.Context, vmid int, kind string, curren
 		totalAlloc += float64(cfg.Memory)
 	}
 
-	// MaxMemBytes is in bytes; convert to MB.
+	// Check host-level memory saturation before computing headroom.
+	hostMemUsed := nodeStatus.Memory.Used / (1024 * 1024)
 	hostMax := nodeStatus.MaxMemBytes() / (1024 * 1024)
+	hostMemFraction := nodeStatus.Memory.Used / nodeStatus.MaxMemBytes()
+	if hostMemFraction >= s.cfg.Scaling.HostMemoryMaxThreshold {
+		return 0, 0, fmt.Errorf("host memory saturated (%.0f%% >= threshold %.0f%%) — host_used=%.0fMB host_max=%.0fMB",
+			hostMemFraction*100, s.cfg.Scaling.HostMemoryMaxThreshold*100, hostMemUsed, hostMax)
+	}
+
 	headroom := hostMax - totalAlloc + currentValue
 
 	s.logger.Debug("capacity check summary",

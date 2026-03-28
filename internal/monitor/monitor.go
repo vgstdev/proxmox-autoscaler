@@ -319,13 +319,10 @@ func (m *Monitor) triggerBoost(
 ) {
 	boostedValue, factor, err := m.scl.ComputeBoost(ctx, state.VMID, string(kind), currentValue)
 	if err != nil {
-		m.logger.Warn("boost impossible - no host capacity",
+		m.logger.Warn("boost impossible",
 			"vmid", state.VMID,
 			"resource", string(kind),
-			"attempted_factors", fmt.Sprintf("%.2f, %.2f",
-				m.cfg.Scaling.PrimaryBoostFactor,
-				m.cfg.Scaling.FallbackBoostFactor,
-			),
+			"reason", err.Error(),
 		)
 		return
 	}

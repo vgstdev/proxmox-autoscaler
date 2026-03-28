@@ -41,10 +41,12 @@ type MonitorConfig struct {
 
 // ScalingConfig holds resource scaling settings.
 type ScalingConfig struct {
-	CPUResource         string  `yaml:"cpu_resource"`
-	PrimaryBoostFactor  float64 `yaml:"primary_boost_factor"`
-	FallbackBoostFactor float64 `yaml:"fallback_boost_factor"`
-	ExcludeTag          string  `yaml:"exclude_tag"`
+	CPUResource            string  `yaml:"cpu_resource"`
+	PrimaryBoostFactor     float64 `yaml:"primary_boost_factor"`
+	FallbackBoostFactor    float64 `yaml:"fallback_boost_factor"`
+	ExcludeTag             string  `yaml:"exclude_tag"`
+	HostCPUMaxThreshold    float64 `yaml:"host_cpu_max_threshold"`
+	HostMemoryMaxThreshold float64 `yaml:"host_memory_max_threshold"`
 }
 
 // NotificationsConfig holds email notification settings.
@@ -96,9 +98,11 @@ func defaultConfig() *Config {
 			HistorySamples:      10,
 		},
 		Scaling: ScalingConfig{
-			CPUResource:         "cores",
-			PrimaryBoostFactor:  1.5,
-			FallbackBoostFactor: 1.25,
+			CPUResource:            "cores",
+			PrimaryBoostFactor:     1.5,
+			FallbackBoostFactor:    1.25,
+			HostCPUMaxThreshold:    0.9,
+			HostMemoryMaxThreshold: 0.9,
 		},
 		Notifications: NotificationsConfig{
 			MailBinary: "/usr/bin/mail",
