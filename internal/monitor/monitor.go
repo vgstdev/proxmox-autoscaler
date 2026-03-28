@@ -369,16 +369,17 @@ func (m *Monitor) triggerBoost(
 	// Send notification.
 	elapsed := int(float64(m.cfg.Monitor.ConsecutiveSamples) * m.cfg.Monitor.PollInterval.Seconds())
 	go m.notif.SendBoost(notifier.BoostParams{
-		Hostname:    m.hostname,
-		VMID:        state.VMID,
-		Name:        state.Name,
-		Resource:    string(kind),
-		Original:    currentValue,
-		Boosted:     boostedValue,
-		BoostFactor: factor,
-		UsagePct:    usageFraction * 100,
-		ElapsedSecs: elapsed,
-		CPUResource: m.cfg.Scaling.CPUResource,
+		Hostname:      m.hostname,
+		VMID:          state.VMID,
+		Name:          state.Name,
+		Resource:      string(kind),
+		Original:      currentValue,
+		Boosted:       boostedValue,
+		BoostFactor:   factor,
+		UsagePct:      usageFraction * 100,
+		ElapsedSecs:   elapsed,
+		CPUResource:   m.cfg.Scaling.CPUResource,
+		BoostDuration: m.cfg.Monitor.BoostDuration,
 	})
 }
 
@@ -511,14 +512,15 @@ func (m *Monitor) revertBoost(ctx context.Context, state *ContainerState, kind R
 	}
 
 	go m.notif.SendRevert(notifier.RevertParams{
-		Hostname:    m.hostname,
-		VMID:        state.VMID,
-		Name:        state.Name,
-		Resource:    string(kind),
-		Boosted:     boostedVal,
-		Original:    originalVal,
-		UsagePct:    currentUsagePct,
-		CPUResource: cpuResource,
+		Hostname:      m.hostname,
+		VMID:          state.VMID,
+		Name:          state.Name,
+		Resource:      string(kind),
+		Boosted:       boostedVal,
+		Original:      originalVal,
+		UsagePct:      currentUsagePct,
+		CPUResource:   cpuResource,
+		BoostDuration: m.cfg.Monitor.BoostDuration,
 	})
 }
 

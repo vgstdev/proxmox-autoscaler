@@ -14,28 +14,30 @@ import (
 
 // BoostParams holds parameters for a boost notification email.
 type BoostParams struct {
-	Hostname    string
-	VMID        int
-	Name        string
-	Resource    string // "cpu" | "memory"
-	Original    float64
-	Boosted     float64
-	BoostFactor float64
-	UsagePct    float64
-	ElapsedSecs int
-	CPUResource string // "cores" | "cpulimit"
+	Hostname      string
+	VMID          int
+	Name          string
+	Resource      string // "cpu" | "memory"
+	Original      float64
+	Boosted       float64
+	BoostFactor   float64
+	UsagePct      float64
+	ElapsedSecs   int
+	CPUResource   string        // "cores" | "cpulimit"
+	BoostDuration time.Duration // configured boost duration
 }
 
 // RevertParams holds parameters for a revert notification email.
 type RevertParams struct {
-	Hostname    string
-	VMID        int
-	Name        string
-	Resource    string
-	Boosted     float64
-	Original    float64
-	UsagePct    float64
-	CPUResource string
+	Hostname      string
+	VMID          int
+	Name          string
+	Resource      string
+	Boosted       float64
+	Original      float64
+	UsagePct      float64
+	CPUResource   string
+	BoostDuration time.Duration
 }
 
 // EmailNotifier sends email notifications via the system mail binary.
@@ -62,13 +64,17 @@ func (n *EmailNotifier) SendBoost(p BoostParams) {
 		return
 	}
 
-	subject := fmt.Sprintf("Autoescalado producido en HOST %s - LXC %d", p.Hostname, p.VMID)
+	subject := fmt.Sprintf("Autoescalado producido en %s => %s(%d)",
+		strings.ToUpper(shortHostname(p.Hostname)),
+		strings.ToLower(p.Name),
+		p.VMID,
+	)
 
 	resourceName, unit := resourceLabel(p.Resource, p.CPUResource)
 	pctIncrease := int((p.BoostFactor - 1) * 100)
 
 	body := fmt.Sprintf(
-		"Contenedor: %d (%s)\nRecurso escalado: %s\nValor original: %s %s\nNuevo valor temporal: %s %s (+%d%%)\nMotivo: uso sostenido al %.0f%% durante %ds\nDuracion del boost: 2 minutos\nTimestamp: %s\n",
+		"Contenedor: %d (%s)\nRecurso escalado: %s\nValor original: %s %s\nNuevo valor temporal: %s %s (+%d%%)\nMotivo: uso sostenido al %.0f%% durante %ds\nDuracion del boost: %s\nTimestamp: %s\n",
 		p.VMID,
 		p.Name,
 		resourceName,
@@ -79,6 +85,7 @@ func (n *EmailNotifier) SendBoost(p BoostParams) {
 		pctIncrease,
 		p.UsagePct,
 		p.ElapsedSecs,
+		p.BoostDuration.String(),
 		time.Now().UTC().Format(time.RFC3339),
 	)
 
@@ -91,7 +98,11 @@ func (n *EmailNotifier) SendRevert(p RevertParams) {
 		return
 	}
 
-	subject := fmt.Sprintf("Autoescalado revertido en HOST %s - LXC %d", p.Hostname, p.VMID)
+	subject := fmt.Sprintf("Autoescalado revertido en %s => %s(%d)",
+		strings.ToUpper(shortHostname(p.Hostname)),
+		strings.ToLower(p.Name),
+		p.VMID,
+	)
 
 	resourceName, unit := resourceLabel(p.Resource, p.CPUResource)
 
@@ -109,6 +120,14 @@ func (n *EmailNotifier) SendRevert(p RevertParams) {
 	)
 
 	n.send(subject, body)
+}
+
+// shortHostname returns the first segment of a hostname (before the first dot).
+func shortHostname(h string) string {
+	if idx := strings.IndexByte(h, '.'); idx != -1 {
+		return h[:idx]
+	}
+	return h
 }
 
 // send executes the mail binary with the given subject and body.
