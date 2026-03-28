@@ -32,8 +32,10 @@ archives:
       {{- else if eq .Arch "arm64" }}arm64
       {{- else }}{{ .Arch }}{{ end }}
     files:
-      - configs/autoscaler.yaml
-      - deployments/proxmox-autoscaler.service
+      - src: configs/autoscaler.yaml
+        dst: .
+      - src: deployments/proxmox-autoscaler.service
+        dst: .
       - README.md
 
 checksum:
