@@ -1,14 +1,13 @@
 # Proxmox Autoscaler
 
-The Kubernetes Horizontal Pod Autoscaler equivalent for Proxmox — a lightweight daemon written in Go that monitors LXC containers and automatically adjusts their CPU and RAM in response to sustained resource saturation, then reverts the allocation once usage returns to normal.
+[![Release](https://img.shields.io/github/v/release/vgstdev/proxmox-autoscaler)](https://github.com/vgstdev/proxmox-autoscaler/releases)
+[![Build](https://github.com/vgstdev/proxmox-autoscaler/actions/workflows/release.yml/badge.svg)](https://github.com/vgstdev/proxmox-autoscaler/actions)
+[![License](https://img.shields.io/github/license/vgstdev/proxmox-autoscaler)](LICENSE)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/vgstdev/proxmox-autoscaler)](go.mod)
+
+We believe this is the **first open-source autoscaling engine for Proxmox**. The Kubernetes Horizontal Pod Autoscaler equivalent for Proxmox — a lightweight daemon written in Go that monitors LXC containers and automatically adjusts their CPU and RAM in response to sustained resource saturation, then reverts the allocation once usage returns to normal.
 
 Because it operates entirely through the Proxmox REST API, it can run directly on the Proxmox host itself or on any external machine that has network access to the API — no agent installation inside the containers is required.
-
-## Why open source?
-
-We believe this is the first open-source autoscaling engine for Proxmox. The Proxmox ecosystem and the broader open-source community provide an enormous number of tools that we rely on every day. This project is our way of giving back — making something genuinely useful available to everyone who builds on top of Proxmox, without restrictions.
-
-If this project saves you time or helps your infrastructure handle load better, consider contributing improvements or spreading the word.
 
 ## Features
 
@@ -17,10 +16,17 @@ If this project saves you time or helps your infrastructure handle load better, 
 - **Graceful fallback** — tries +50% first; falls back to +25% if host capacity is insufficient; skips if neither fits
 - **Persistent state** — boost state survives service restarts via SQLite; on startup the service reconciles live Proxmox config against stored state
 - **Manual change detection** — if an administrator changes a container's resources from the Proxmox UI while a boost is active, the service detects the discrepancy and adopts the new value as the baseline without overwriting it
-- **Email notifications** — sends an email on boost and on revert using the system mail utility
+- **Email notifications** — sends an email on boost and on revert using the system mail utility, in English or Spanish
 - **Structured logging** — logs to stdout (journald) and optionally to a file; only meaningful events are logged (no per-poll noise)
 - **LXC only** — QEMU/KVM virtual machines are intentionally ignored
 - **Exclusion tag** — containers tagged with a configurable tag (default: `noautoscale`) are skipped
+
+## Requirements
+
+- Proxmox VE 7.x, 8.x or 9.x
+- A Proxmox API token with sufficient permissions (see below)
+- Network access to the Proxmox API (`https://<host>:8006`) from wherever the service runs
+- A working system mail utility (e.g. `mailutils`, `msmtp`) on the machine running the service, if email notifications are enabled
 
 ## How it works
 
@@ -45,13 +51,6 @@ Every 5 seconds (configurable):
       → If still saturated: next poll cycle will re-evaluate and re-boost
 ```
 
-## Requirements
-
-- Proxmox VE 7.x, 8.x or 9.x
-- A Proxmox API token with sufficient permissions (see below)
-- Network access to the Proxmox API (`https://<host>:8006`) from wherever the service runs
-- A working system mail utility (e.g. `mailutils`, `msmtp`) on the machine running the service, if email notifications are enabled
-
 ## Installation
 
 ### Automated deployment script (recommended)
@@ -60,7 +59,7 @@ The `scripts/deploy.sh` script handles the full installation, update, and uninst
 
 ```bash
 # Download and run directly on the target machine
-curl -fsSL https://raw.githubusercontent.com/vguerrero/proxmox-autoscaler/main/scripts/deploy.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/vgstdev/proxmox-autoscaler/main/scripts/deploy.sh | sudo bash
 
 # Or clone first and run locally
 sudo ./scripts/deploy.sh             # install latest release
@@ -86,9 +85,9 @@ The service communicates with Proxmox exclusively through its REST API, so it ca
 
 Both deployments are identical; only the value of `proxmox.host` in the config changes.
 
-### From a release binary (recommended)
+### From a release binary
 
-1. Download the latest release for your architecture from the [Releases](../../releases) page.
+1. Download the latest release for your architecture from the [Releases](https://github.com/vgstdev/proxmox-autoscaler/releases) page.
 
    ```bash
    # Example for amd64
@@ -121,7 +120,7 @@ Both deployments are identical; only the value of `proxmox.host` in the config c
 Requires Go 1.21+.
 
 ```bash
-git clone https://github.com/<your-username>/proxmox-autoscaler.git
+git clone https://github.com/vgstdev/proxmox-autoscaler.git
 cd proxmox-autoscaler
 
 # Build for Linux amd64 (from any OS)
@@ -132,11 +131,11 @@ make build-linux
 ## Creating a Proxmox API Token
 
 1. In the Proxmox web UI go to **Datacenter → Permissions → API Tokens → Add**
-2. Select a user (e.g. `root@pam`), set Token ID to `monitor`
+2. Select a user (e.g. `root@pam`), set Token ID to `autoscaler`
 3. **Uncheck** "Privilege Separation" so the token inherits the user's permissions
 4. Copy the displayed secret — it is only shown once
 
-The resulting `token_id` value will be `root@pam!monitor`.
+The resulting `token_id` value will be `root@pam!autoscaler`.
 
 ## Configuration
 
@@ -146,7 +145,7 @@ The default config path is `/etc/proxmox-autoscaler/autoscaler.yaml`. Override i
 proxmox:
   host: "https://192.168.1.10:8006"   # Proxmox host URL
   node: "pve"                          # Node name as shown in the UI
-  token_id: "root@pam!monitor"         # user@realm!token-name
+  token_id: "root@pam!autoscaler"      # user@realm!token-name
   token_secret: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
   insecure_tls: false                  # Set true for self-signed certificates
 
@@ -165,11 +164,14 @@ scaling:
   primary_boost_factor: 1.5    # First attempt: +50%
   fallback_boost_factor: 1.25  # Second attempt if host has insufficient capacity: +25%
   exclude_tag: "noautoscale"   # LXC containers with this tag are never scaled
+  host_cpu_max_threshold: 0.9    # Skip CPU boost if host CPU usage >= 90%
+  host_memory_max_threshold: 0.9 # Skip memory boost if host memory usage >= 90%
 
 notifications:
   enabled: true
   mail_binary: "/usr/bin/mail"  # Path to system mail binary
   to: "admin@example.com"       # Notification recipient
+  language: "es"                # Email language: "es" (Spanish) | "en" (English)
 
 logging:
   level: "info"    # debug | info | warn | error
@@ -207,7 +209,7 @@ The service only logs meaningful events. Per-poll status checks are intentionall
 | `INFO` | Boost state resumed from DB on startup |
 | `INFO` | Boost state cleared — reverted externally while service was down |
 | `INFO` | Email sent |
-| `WARN` | Boost impossible — insufficient host capacity |
+| `WARN` | Boost impossible — host saturated or insufficient capacity |
 | `WARN` | Manual change detected — adopting new value as baseline |
 | `WARN` | Email send failed |
 | `WARN` | Container skipped — excluded by tag |
@@ -223,10 +225,10 @@ time=2026-03-27T14:30:00Z level=INFO msg="service started" version=1.0.0 node=pv
 time=2026-03-27T14:30:00Z level=INFO msg="DB opened" path=/var/lib/proxmox-autoscaler/state.db status=existing
 time=2026-03-27T14:30:00Z level=INFO msg="boost state resumed from DB on startup" vmid=102 resource=cpu original=4 boosted=6 remaining_seconds=73
 time=2026-03-27T14:31:13Z level=INFO msg="boost reverted - normal" vmid=102 resource=cpu boosted_value=6 original_value=4 current_usage_pct=38.2
-time=2026-03-27T14:31:13Z level=INFO msg="email sent" to=admin@example.com subject="Autoescalado revertido en HOST pve - LXC 102"
+time=2026-03-27T14:31:13Z level=INFO msg="email sent" to=admin@example.com subject="Autoescalado revertido en MAIN => testing.local(102)"
 time=2026-03-27T14:45:22Z level=INFO msg="boost applied" vmid=105 resource=memory original_value=2048 new_value=3072 factor=1.5
 time=2026-03-27T14:47:10Z level=WARN msg="manual change detected - adopting new baseline" vmid=105 resource=memory expected_boost_value=3072 actual_value=4096 new_baseline=4096
-time=2026-03-27T14:52:01Z level=WARN msg="boost impossible - no host capacity" vmid=107 resource=cpu attempted_factors="1.50, 1.25"
+time=2026-03-27T14:52:01Z level=WARN msg="boost impossible" vmid=107 resource=cpu reason="host CPU saturated (92% >= threshold 90%)"
 ```
 
 ## Service management
@@ -245,17 +247,6 @@ systemctl stop proxmox-autoscaler
 systemctl disable proxmox-autoscaler
 ```
 
-## Release process
-
-Releases are built automatically by GitHub Actions when a tag is pushed:
-
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-GitHub Actions will compile binaries for `linux/amd64` and `linux/arm64`, package them with the example config and systemd unit, and publish a GitHub Release with the archives and a `checksums.txt` file.
-
 ## Building from source
 
 ```bash
@@ -269,5 +260,11 @@ make build-linux
 Requires Go 1.21+. No CGO, no external system dependencies.
 
 ## License
+
+The Proxmox ecosystem and the broader open-source community provide an enormous number of tools that we rely on every day. This project is our way of giving back — making something genuinely useful available to everyone who builds on top of Proxmox, without restrictions.
+
+If this project saves you time or helps your infrastructure handle load better, consider contributing improvements or spreading the word.
+
+❤️ Made with love by VGS for the open-source community.
 
 MIT — Copyright (c) 2026 [VGS](https://vgst.net)

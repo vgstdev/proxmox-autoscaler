@@ -12,7 +12,7 @@ set -euo pipefail
 
 # ─── Configuration ────────────────────────────────────────────────────────────
 
-GITHUB_REPO="vguerrero/proxmox-autoscaler"   # ← update with your actual repo
+GITHUB_REPO="vgstdev/proxmox-autoscaler"
 BINARY_NAME="proxmox-autoscaler"
 SERVICE_NAME="proxmox-autoscaler"
 
