@@ -71,6 +71,7 @@ func main() {
 		cfg.Notifications.Enabled,
 		cfg.Notifications.MailBinary,
 		cfg.Notifications.To,
+		cfg.Notifications.Language,
 		logger,
 	)
 

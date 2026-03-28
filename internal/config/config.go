@@ -54,6 +54,7 @@ type NotificationsConfig struct {
 	Enabled    bool   `yaml:"enabled"`
 	MailBinary string `yaml:"mail_binary"`
 	To         string `yaml:"to"`
+	Language   string `yaml:"language"` // "es" | "en"
 }
 
 // LoggingConfig holds logging settings.
@@ -106,6 +107,7 @@ func defaultConfig() *Config {
 		},
 		Notifications: NotificationsConfig{
 			MailBinary: "/usr/bin/mail",
+			Language:   "es",
 		},
 		Logging: LoggingConfig{
 			Level:  "info",
