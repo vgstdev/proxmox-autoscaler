@@ -27,8 +27,8 @@ type ContainerStatus struct {
 	VMID    int     `json:"vmid"`
 	Name    string  `json:"name"`
 	Status  string  `json:"status"`
-	CPU     float64 `json:"cpu"`  // fraction of total host CPU (0..1 per host CPU)
-	CPUs    float64 `json:"cpus"` // number of CPUs visible to container
+	CPU     float64 `json:"cpu"`  // fraction of container's usable CPUs currently in use (0..1)
+	CPUs    float64 `json:"cpus"` // maximum usable CPUs for this container
 	Mem     float64 `json:"mem"`
 	MaxMem  float64 `json:"maxmem"`
 }
