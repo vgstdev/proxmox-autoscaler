@@ -191,6 +191,26 @@ storage:
   db_path: "/var/lib/proxmox-autoscaler/state.db"
 ```
 
+### Setting up Slack notifications
+
+1. Go to [https://api.slack.com/apps](https://api.slack.com/apps) and click **Create New App → From scratch**.
+2. Give it a name (e.g. `Proxmox Autoscaler`) and select your workspace.
+3. In the left menu go to **OAuth & Permissions**.
+4. Under **Bot Token Scopes** add the scope `chat:write`.
+5. Click **Install to Workspace** and authorise the app.
+6. Copy the **Bot User OAuth Token** (starts with `xoxb-`). This is your `token`.
+7. Invite the bot to the target channel: in Slack open the channel, type `/invite @Proxmox Autoscaler` (or whatever you named it).
+8. Get the channel ID: right-click the channel name → **View channel details** → copy the ID at the bottom (e.g. `C0XXXXXXXXX`). This is your `channel`.
+9. Set both values in the config and set `enabled: true`:
+
+```yaml
+notifications:
+  slack:
+    enabled: true
+    token: "xoxb-xxxxxxxxxxxx-xxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxx"
+    channel: "C0XXXXXXXXX"
+```
+
 ### Excluding a container
 
 Add the `noautoscale` tag to any LXC container from the Proxmox UI (**Container → Options → Tags**) or via CLI:
