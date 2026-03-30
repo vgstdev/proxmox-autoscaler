@@ -468,7 +468,7 @@ func (m *Monitor) revertBoost(ctx context.Context, state *ContainerState, kind R
 				alloc = currentCfg.CPULimit
 			}
 			if alloc > 0 {
-				currentUsagePct = (currentStatus.CPU * float64(nodeStatus.MaxCPU())) / alloc * 100
+				currentUsagePct = currentStatus.CPU * 100
 			}
 		} else {
 			if currentStatus.MaxMem > 0 {

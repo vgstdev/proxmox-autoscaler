@@ -142,7 +142,7 @@ func (n *EmailNotifier) SendBoost(p BoostParams) {
 		n.lang.NewTempValue, formatValue(p.Resource, p.CPUResource, p.Boosted), unit, pctIncrease,
 		reason,
 		n.lang.BoostDuration, formatDuration(p.BoostDuration),
-		n.lang.Timestamp, time.Now().UTC().Format(time.RFC3339),
+		n.lang.Timestamp, time.Now().Format(time.RFC3339),
 	)
 
 	n.send(subject, body)
@@ -170,7 +170,7 @@ func (n *EmailNotifier) SendRevert(p RevertParams) {
 		n.lang.BoostValue, formatValue(p.Resource, p.CPUResource, p.Boosted), unit,
 		n.lang.RestoredValue, formatValue(p.Resource, p.CPUResource, p.Original), unit,
 		n.lang.UsageAtRevert, p.UsagePct,
-		n.lang.Timestamp, time.Now().UTC().Format(time.RFC3339),
+		n.lang.Timestamp, time.Now().Format(time.RFC3339),
 	)
 
 	n.send(subject, body)
