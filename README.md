@@ -16,7 +16,7 @@ Because it operates entirely through the Proxmox REST API, it can run directly o
 - **Graceful fallback** — tries +50% first; falls back to +25% if host capacity is insufficient; skips if neither fits
 - **Persistent state** — boost state survives service restarts via SQLite; on startup the service reconciles live Proxmox config against stored state
 - **Manual change detection** — if an administrator changes a container's resources from the Proxmox UI while a boost is active, the service detects the discrepancy and adopts the new value as the baseline without overwriting it
-- **Email notifications** — sends an email on boost and on revert using the system mail utility, in English or Spanish
+- **Email and Slack notifications** — sends alerts on boost and revert via email (system mail utility) and/or Slack (Bot API), in English or Spanish
 - **Structured logging** — logs to stdout (journald) and optionally to a file; only meaningful events are logged (no per-poll noise)
 - **LXC only** — QEMU/KVM virtual machines are intentionally ignored
 - **Exclusion tag** — containers tagged with a configurable tag (default: `noautoscale`) are skipped
@@ -26,7 +26,8 @@ Because it operates entirely through the Proxmox REST API, it can run directly o
 - Proxmox VE 7.x, 8.x or 9.x
 - A Proxmox API token with sufficient permissions (see below)
 - Network access to the Proxmox API (`https://<host>:8006`) from wherever the service runs
-- A working system mail utility (e.g. `mailutils`, `msmtp`) on the machine running the service, if email notifications are enabled
+- A working system mail utility (e.g. `mailutils`, `msmtp`) if email notifications are enabled
+- A Slack Bot token and channel ID if Slack notifications are enabled
 
 ## How it works
 
@@ -35,7 +36,7 @@ Every 5 seconds (configurable):
 
   For each running LXC container (excluding tagged ones):
 
-    CPU saturation  = status.cpu                                    ≥ 95%
+    CPU saturation  = (status.cpu × host_cores) / container_cores  ≥ 95%
     RAM saturation  = mem_used / mem_total                          ≥ 95%
 
     If saturated for 3 consecutive polls (15 s):
@@ -168,10 +169,15 @@ scaling:
   host_memory_max_threshold: 0.9 # Skip memory boost if host memory usage >= 90%
 
 notifications:
-  enabled: true
-  mail_binary: "/usr/bin/mail"  # Path to system mail binary
-  to: "admin@example.com"       # Notification recipient
-  language: "es"                # Email language: "es" (Spanish) | "en" (English)
+  email:
+    enabled: true
+    mail_binary: "/usr/bin/mail"  # Path to system mail binary
+    to: "admin@example.com"       # Notification recipient
+    language: "es"                # Email language: "es" (Spanish) | "en" (English)
+  slack:
+    enabled: false
+    token: "xoxb-xxxxxxxxxxxx-xxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxx"  # Slack Bot token
+    channel: "C0XXXXXXXXX"        # Slack channel ID
 
 logging:
   level: "info"    # debug | info | warn | error

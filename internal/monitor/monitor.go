@@ -24,7 +24,7 @@ type Monitor struct {
 	client   *proxmox.Client
 	database *db.DB
 	scl      *scaler.Scaler
-	notif    *notifier.EmailNotifier
+	notif    notifier.Notifier
 	logger   *slog.Logger
 	hostname string
 
@@ -43,7 +43,7 @@ func New(
 	cfg *config.Config,
 	client *proxmox.Client,
 	database *db.DB,
-	notif *notifier.EmailNotifier,
+	notif notifier.Notifier,
 	logger *slog.Logger,
 	hostname string,
 ) (*Monitor, error) {

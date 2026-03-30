@@ -72,14 +72,26 @@ func main() {
 		cfg.Proxmox.InsecureTLS,
 	)
 
-	// Create notifier.
-	notif := notifier.New(
-		cfg.Notifications.Enabled,
-		cfg.Notifications.MailBinary,
-		cfg.Notifications.To,
-		cfg.Notifications.Language,
-		logger,
-	)
+	// Create notifiers.
+	var backends []notifier.Notifier
+	if cfg.Notifications.Email.Enabled {
+		backends = append(backends, notifier.New(
+			cfg.Notifications.Email.Enabled,
+			cfg.Notifications.Email.MailBinary,
+			cfg.Notifications.Email.To,
+			cfg.Notifications.Email.Language,
+			logger,
+		))
+	}
+	if cfg.Notifications.Slack.Enabled {
+		backends = append(backends, notifier.NewSlack(
+			cfg.Notifications.Slack.Enabled,
+			cfg.Notifications.Slack.Token,
+			cfg.Notifications.Slack.Channel,
+			logger,
+		))
+	}
+	notif := notifier.NewMulti(backends...)
 
 	// Create and start monitor.
 	mon, err := monitor.New(cfg, client, database, notif, logger, hostname)

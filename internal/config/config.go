@@ -49,12 +49,25 @@ type ScalingConfig struct {
 	HostMemoryMaxThreshold float64 `yaml:"host_memory_max_threshold"`
 }
 
-// NotificationsConfig holds email notification settings.
+// NotificationsConfig holds notification settings for all backends.
 type NotificationsConfig struct {
+	Email EmailNotifConfig `yaml:"email"`
+	Slack SlackNotifConfig `yaml:"slack"`
+}
+
+// EmailNotifConfig holds email notification settings.
+type EmailNotifConfig struct {
 	Enabled    bool   `yaml:"enabled"`
 	MailBinary string `yaml:"mail_binary"`
 	To         string `yaml:"to"`
 	Language   string `yaml:"language"` // "es" | "en"
+}
+
+// SlackNotifConfig holds Slack Bot API notification settings.
+type SlackNotifConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Token   string `yaml:"token"`   // Bot token (xoxb-...)
+	Channel string `yaml:"channel"` // Channel ID (e.g. C0XXXXXXXXX)
 }
 
 // LoggingConfig holds logging settings.
@@ -106,8 +119,10 @@ func defaultConfig() *Config {
 			HostMemoryMaxThreshold: 0.9,
 		},
 		Notifications: NotificationsConfig{
-			MailBinary: "/usr/bin/mail",
-			Language:   "es",
+			Email: EmailNotifConfig{
+				MailBinary: "/usr/bin/mail",
+				Language:   "es",
+			},
 		},
 		Logging: LoggingConfig{
 			Level:  "info",
