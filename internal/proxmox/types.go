@@ -39,6 +39,7 @@ type ContainerConfig struct {
 	Cores    int     `json:"cores"`
 	CPULimit float64 `json:"cpulimit"`
 	Memory   int     `json:"memory"` // MB
+	Tags     string  `json:"tags"`   // semicolon-separated
 }
 
 // NodeStatus represents the node-level stats from
@@ -98,11 +99,12 @@ func (c *ContainerConfig) UnmarshalJSON(b []byte) error {
 }
 
 // ConfigUpdateRequest holds the fields to update via PUT /nodes/{node}/lxc/{vmid}/config.
-// Only non-zero fields will be sent.
+// Only non-nil fields will be sent.
 type ConfigUpdateRequest struct {
 	Cores    *int
 	CPULimit *float64
-	Memory   *int // MB
+	Memory   *int    // MB
+	Tags     *string // semicolon-separated; replaces existing tags
 }
 
 // apiResponse is the generic envelope returned by the Proxmox API.

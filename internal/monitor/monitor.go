@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -365,6 +366,11 @@ func (m *Monitor) triggerBoost(
 		m.logger.Error("DB error", "operation", "SaveBoost", "error", err)
 	}
 
+	// Add "boosted" tag to container.
+	if cfg, err := m.client.GetContainerConfig(ctx, state.VMID); err == nil {
+		m.setTag(ctx, state.VMID, cfg.Tags, true)
+	}
+
 	// Send notification.
 	elapsed := int(float64(m.cfg.Monitor.ConsecutiveSamples) * m.cfg.Monitor.PollInterval.Seconds())
 	go m.notif.SendBoost(notifier.BoostParams{
@@ -453,6 +459,9 @@ func (m *Monitor) revertBoost(ctx context.Context, state *ContainerState, kind R
 		)
 		return
 	}
+
+	// Remove "boosted" tag from container.
+	m.setTag(ctx, state.VMID, currentCfg.Tags, false)
 
 	// Determine current usage for the log.
 	currentStatus, _ := m.client.GetContainerStatus(ctx, state.VMID)
@@ -673,4 +682,45 @@ func abs(x float64) float64 {
 		return -x
 	}
 	return x
+}
+
+const boostedTag = "boosted"
+
+// setTag adds or removes a tag from the container's tag list and updates Proxmox.
+func (m *Monitor) setTag(ctx context.Context, vmid int, currentTags string, add bool) {
+	tags := splitTags(currentTags)
+	if add {
+		for _, t := range tags {
+			if t == boostedTag {
+				return // already present
+			}
+		}
+		tags = append(tags, boostedTag)
+	} else {
+		filtered := tags[:0]
+		for _, t := range tags {
+			if t != boostedTag {
+				filtered = append(filtered, t)
+			}
+		}
+		tags = filtered
+	}
+	newTags := joinTags(tags)
+	if err := m.client.UpdateContainerConfig(ctx, vmid, proxmox.ConfigUpdateRequest{Tags: &newTags}); err != nil {
+		m.logger.Warn("could not update container tags", "vmid", vmid, "error", err)
+	}
+}
+
+func splitTags(raw string) []string {
+	var out []string
+	for _, t := range strings.Split(raw, ";") {
+		if t = strings.TrimSpace(t); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+func joinTags(tags []string) string {
+	return strings.Join(tags, ";")
 }

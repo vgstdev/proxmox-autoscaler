@@ -107,6 +107,9 @@ func (c *Client) UpdateContainerConfig(ctx context.Context, vmid int, req Config
 	if req.Memory != nil {
 		fields.Set("memory", fmt.Sprintf("%d", *req.Memory))
 	}
+	if req.Tags != nil {
+		fields.Set("tags", *req.Tags)
+	}
 
 	if len(fields) == 0 {
 		return nil
