@@ -33,12 +33,7 @@ func New(client *proxmox.Client, cfg *config.Config, logger *slog.Logger) *Scale
 // uses the CFS scheduler and allows overprovisioning by design. However, if the
 // host itself is saturated above host_cpu_max_threshold, the boost is skipped —
 // there is no spare CPU time to redistribute.
-func (s *Scaler) ComputeBoost(ctx context.Context, vmid int, kind string, currentValue float64) (float64, float64, error) {
-	nodeStatus, err := s.client.GetNodeStatus(ctx)
-	if err != nil {
-		return 0, 0, fmt.Errorf("get node status: %w", err)
-	}
-
+func (s *Scaler) ComputeBoost(ctx context.Context, vmid int, kind string, currentValue float64, nodeStatus *proxmox.NodeStatus) (float64, float64, error) {
 	// Check host-level saturation regardless of resource type.
 	if kind == "cpu" {
 		if nodeStatus.CPU >= s.cfg.Scaling.HostCPUMaxThreshold {

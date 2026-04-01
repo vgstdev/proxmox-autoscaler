@@ -256,7 +256,7 @@ func (m *Monitor) evaluateCPU(
 
 	if rs.SaturatedCount >= m.cfg.Monitor.ConsecutiveSamples {
 		rs.PreBoostAvg = rs.computePreBoostAvg(m.cfg.Monitor.ConsecutiveSamples)
-		m.triggerBoost(ctx, state, ResourceCPU, allocatedCPU, cpuUsage)
+		m.triggerBoost(ctx, state, ResourceCPU, allocatedCPU, cpuUsage, cfg.Tags, node)
 	}
 }
 
@@ -304,7 +304,7 @@ func (m *Monitor) evaluateMemory(
 		rs.PreBoostAvg = rs.computePreBoostAvg(m.cfg.Monitor.ConsecutiveSamples)
 		// Convert current memory allocation to MB for consistent units.
 		allocatedMB := float64(cfg.Memory)
-		m.triggerBoost(ctx, state, ResourceMemory, allocatedMB, memUsage)
+		m.triggerBoost(ctx, state, ResourceMemory, allocatedMB, memUsage, cfg.Tags, node)
 	}
 }
 
@@ -316,8 +316,10 @@ func (m *Monitor) triggerBoost(
 	kind ResourceKind,
 	currentValue float64,
 	usageFraction float64,
+	currentTags string,
+	nodeStatus *proxmox.NodeStatus,
 ) {
-	boostedValue, factor, err := m.scl.ComputeBoost(ctx, state.VMID, string(kind), currentValue)
+	boostedValue, factor, err := m.scl.ComputeBoost(ctx, state.VMID, string(kind), currentValue, nodeStatus)
 	if err != nil {
 		m.logger.Warn("boost impossible",
 			"vmid", state.VMID,
@@ -367,9 +369,7 @@ func (m *Monitor) triggerBoost(
 	}
 
 	// Add "boosted" tag to container.
-	if cfg, err := m.client.GetContainerConfig(ctx, state.VMID); err == nil {
-		m.setTag(ctx, state.VMID, cfg.Tags, true)
-	}
+	m.setTag(ctx, state.VMID, currentTags, true)
 
 	// Send notification.
 	elapsed := int(float64(m.cfg.Monitor.ConsecutiveSamples) * m.cfg.Monitor.PollInterval.Seconds())
@@ -465,10 +465,9 @@ func (m *Monitor) revertBoost(ctx context.Context, state *ContainerState, kind R
 
 	// Determine current usage for the log.
 	currentStatus, _ := m.client.GetContainerStatus(ctx, state.VMID)
-	nodeStatus, _ := m.client.GetNodeStatus(ctx)
 
 	var currentUsagePct float64
-	if currentStatus != nil && nodeStatus != nil {
+	if currentStatus != nil {
 		if kind == ResourceCPU {
 			var alloc float64
 			if m.cfg.Scaling.CPUResource == "cores" {
