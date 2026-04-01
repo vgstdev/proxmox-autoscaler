@@ -20,7 +20,7 @@ import (
 	"proxmox-autoscaler/internal/proxmox"
 )
 
-var version = "1.0.0"
+var version = "1.0.8"
 
 func main() {
 	configPath := flag.String("config", "/etc/proxmox-autoscaler/autoscaler.yaml", "path to config file")
