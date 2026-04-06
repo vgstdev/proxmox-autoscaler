@@ -32,11 +32,13 @@ type ProxmoxConfig struct {
 
 // MonitorConfig holds monitoring behaviour settings.
 type MonitorConfig struct {
-	PollInterval        time.Duration `yaml:"poll_interval"`
-	SaturationThreshold float64       `yaml:"saturation_threshold"`
-	ConsecutiveSamples  int           `yaml:"consecutive_samples"`
-	BoostDuration       time.Duration `yaml:"boost_duration"`
-	HistorySamples      int           `yaml:"history_samples"`
+	PollInterval                time.Duration `yaml:"poll_interval"`
+	SaturationThreshold         float64       `yaml:"saturation_threshold"`
+	DownscaleThreshold          float64       `yaml:"downscale_threshold"`
+	ConsecutiveSamples          int           `yaml:"consecutive_samples"`
+	DownscaleConsecutiveSamples int           `yaml:"downscale_consecutive_samples"`
+	BoostDuration               time.Duration `yaml:"boost_duration"`
+	HistorySamples              int           `yaml:"history_samples"`
 }
 
 // ScalingConfig holds resource scaling settings.
@@ -105,11 +107,13 @@ func Load(path string) (*Config, error) {
 func defaultConfig() *Config {
 	return &Config{
 		Monitor: MonitorConfig{
-			PollInterval:        5 * time.Second,
-			SaturationThreshold: 0.95,
-			ConsecutiveSamples:  3,
-			BoostDuration:       2 * time.Minute,
-			HistorySamples:      10,
+			PollInterval:                5 * time.Second,
+			SaturationThreshold:         0.95,
+			DownscaleThreshold:          0.8,
+			ConsecutiveSamples:          3,
+			DownscaleConsecutiveSamples: 6,
+			BoostDuration:               2 * time.Minute,
+			HistorySamples:              10,
 		},
 		Scaling: ScalingConfig{
 			CPUResource:            "cores",
@@ -153,8 +157,17 @@ func (c *Config) validate() error {
 	if c.Monitor.SaturationThreshold <= 0 || c.Monitor.SaturationThreshold > 1 {
 		return fmt.Errorf("monitor.saturation_threshold must be between 0 and 1")
 	}
+	if c.Monitor.DownscaleThreshold <= 0 || c.Monitor.DownscaleThreshold > 1 {
+		return fmt.Errorf("monitor.downscale_threshold must be between 0 and 1")
+	}
+	if c.Monitor.DownscaleThreshold >= c.Monitor.SaturationThreshold {
+		return fmt.Errorf("monitor.downscale_threshold must be lower than monitor.saturation_threshold")
+	}
 	if c.Monitor.ConsecutiveSamples <= 0 {
 		return fmt.Errorf("monitor.consecutive_samples must be positive")
+	}
+	if c.Monitor.DownscaleConsecutiveSamples <= 0 {
+		return fmt.Errorf("monitor.downscale_consecutive_samples must be positive")
 	}
 	if c.Monitor.BoostDuration <= 0 {
 		return fmt.Errorf("monitor.boost_duration must be positive")

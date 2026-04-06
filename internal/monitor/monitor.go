@@ -196,11 +196,6 @@ func (m *Monitor) evaluateCPU(
 
 	rs := &state.CPU
 
-	if rs.Phase == phaseBoosted {
-		// CPU is already boosted; saturation checks are skipped until it reverts.
-		return
-	}
-
 	// Determine the allocated CPU value (used for boost amount calculation).
 	var allocatedCPU float64
 	if m.cfg.Scaling.CPUResource == "cores" {
@@ -247,6 +242,11 @@ func (m *Monitor) evaluateCPU(
 
 	rs.addHistory(cpuUsage, m.cfg.Monitor.HistorySamples)
 
+	if rs.Phase == phaseBoosted {
+		rs.observeBoostedUsage(cpuUsage, m.cfg.Monitor.DownscaleThreshold)
+		return
+	}
+
 	threshold := m.cfg.Monitor.SaturationThreshold
 	if cpuUsage >= threshold {
 		rs.SaturatedCount++
@@ -273,10 +273,6 @@ func (m *Monitor) evaluateMemory(
 
 	rs := &state.Mem
 
-	if rs.Phase == phaseBoosted {
-		return
-	}
-
 	if status.MaxMem <= 0 {
 		return
 	}
@@ -292,6 +288,11 @@ func (m *Monitor) evaluateMemory(
 	)
 
 	rs.addHistory(memUsage, m.cfg.Monitor.HistorySamples)
+
+	if rs.Phase == phaseBoosted {
+		rs.observeBoostedUsage(memUsage, m.cfg.Monitor.DownscaleThreshold)
+		return
+	}
 
 	threshold := m.cfg.Monitor.SaturationThreshold
 	if memUsage >= threshold {
@@ -346,6 +347,8 @@ func (m *Monitor) triggerBoost(
 	rs.BoostFactor = factor
 	rs.BoostedAt = now
 	rs.SaturatedCount = 0
+	rs.DownscaleCount = 0
+	rs.downscaleDeferred = false
 
 	m.logger.Info("boost applied",
 		"vmid", state.VMID,
@@ -400,7 +403,17 @@ func (m *Monitor) checkExpiredBoosts(ctx context.Context) {
 			if rs.Phase != phaseBoosted {
 				continue
 			}
-			if now.Sub(rs.BoostedAt) < m.cfg.Monitor.BoostDuration {
+			if !rs.canDownscale(now, m.cfg.Monitor.BoostDuration, m.cfg.Monitor.DownscaleConsecutiveSamples) {
+				if now.Sub(rs.BoostedAt) >= m.cfg.Monitor.BoostDuration && !rs.downscaleDeferred {
+					m.logger.Info("boost retained - usage not stable enough to downscale",
+						"vmid", state.VMID,
+						"resource", string(kind),
+						"downscale_threshold_pct", fmt.Sprintf("%.1f", m.cfg.Monitor.DownscaleThreshold*100),
+						"safe_samples", rs.DownscaleCount,
+						"required_safe_samples", m.cfg.Monitor.DownscaleConsecutiveSamples,
+					)
+					rs.downscaleDeferred = true
+				}
 				continue
 			}
 			m.revertBoost(ctx, state, kind, rs)
@@ -443,8 +456,7 @@ func (m *Monitor) revertBoost(ctx context.Context, state *ContainerState, kind R
 			"new_baseline", currentActual,
 		)
 		rs.OriginalValue = currentActual
-		rs.Phase = phaseNormal
-		rs.SaturatedCount = 0
+		rs.clearBoostState()
 		if err := m.database.DeleteBoost(state.VMID, string(kind)); err != nil {
 			m.logger.Error("DB error", "operation", "DeleteBoost", "error", err)
 		}
@@ -508,11 +520,7 @@ func (m *Monitor) revertBoost(ctx context.Context, state *ContainerState, kind R
 	originalVal := rs.OriginalValue
 	cpuResource := m.cfg.Scaling.CPUResource
 
-	rs.Phase = phaseNormal
-	rs.SaturatedCount = 0
-	rs.BoostedValue = 0
-	rs.BoostFactor = 0
-	rs.BoostedAt = time.Time{}
+	rs.clearBoostState()
 
 	if err := m.database.DeleteBoost(state.VMID, string(kind)); err != nil {
 		m.logger.Error("DB error", "operation", "DeleteBoost", "error", err)

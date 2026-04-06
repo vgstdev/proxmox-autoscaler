@@ -5,14 +5,14 @@
 [![License](https://img.shields.io/github/license/vgstdev/proxmox-autoscaler)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/vgstdev/proxmox-autoscaler)](go.mod)
 
-We believe this is the **first open-source autoscaling engine for Proxmox**. The Kubernetes Horizontal Pod Autoscaler equivalent for Proxmox — a lightweight daemon written in Go that monitors LXC containers and automatically adjusts their CPU and RAM in response to sustained resource saturation, then reverts the allocation once usage returns to normal.
+We believe this is the **first open-source autoscaling engine for Proxmox**. The Kubernetes Horizontal Pod Autoscaler equivalent for Proxmox — a lightweight daemon written in Go that monitors LXC containers and automatically adjusts their CPU and RAM in response to sustained resource saturation, then reverts the allocation only after usage has stayed back within a safer range.
 
 Because it operates entirely through the Proxmox REST API, it can run directly on the Proxmox host itself or on any external machine that has network access to the API — no agent installation inside the containers is required.
 
 ## Features
 
 - **Independent per-resource scaling** — CPU and RAM are monitored and scaled independently
-- **Temporary boosts** — resources are increased for a configurable duration (default 2 minutes) and always reverted
+- **Temporary boosts with downscale hysteresis** — resources are increased for a configurable duration (default 2 minutes) and reverted only after sustained usage below the downscale threshold
 - **Graceful fallback** — tries +50% first; falls back to +25% if host capacity is insufficient; skips if neither fits
 - **Persistent state** — boost state survives service restarts via SQLite; on startup the service reconciles live Proxmox config against stored state
 - **Manual change detection** — if an administrator changes a container's resources from the Proxmox UI while a boost is active, the service detects the discrepancy and adopts the new value as the baseline without overwriting it
@@ -47,9 +47,9 @@ Every 5 seconds (configurable):
     After boost_duration (2 min):
       → Re-read container config from Proxmox API
       → If value was changed manually: adopt it as new baseline, cancel boost
-      → Otherwise: revert to original value
-      → Log and email regardless of whether usage normalised
-      → If still saturated: next poll cycle will re-evaluate and re-boost
+      → Otherwise: revert only if usage stayed below 80% for 6 consecutive polls
+      → If usage is still too high: keep the boost and check again on the next cycle
+      → Log and email only when the revert actually happens
 ```
 
 ## Installation
@@ -151,11 +151,13 @@ proxmox:
   insecure_tls: false                  # Set true for self-signed certificates
 
 monitor:
-  poll_interval: 5s          # How often to check each container
-  saturation_threshold: 0.95 # Fraction of allocated resource considered saturated (0–1)
-  consecutive_samples: 3     # Consecutive saturated polls required before boosting
-  boost_duration: 2m         # How long the boost lasts before reverting
-  history_samples: 10        # Rolling window size for pre-boost average calculation
+  poll_interval: 5s                   # How often to check each container
+  saturation_threshold: 0.95          # Fraction of allocated resource considered saturated (0–1)
+  downscale_threshold: 0.80           # Boost is kept until usage stays strictly below this threshold
+  consecutive_samples: 3              # Consecutive saturated polls required before boosting
+  downscale_consecutive_samples: 6    # Consecutive safe polls required before reverting a boost
+  boost_duration: 2m                  # Minimum time a boost stays active before downscale is considered
+  history_samples: 10                 # Rolling window size for pre-boost average calculation
 
 scaling:
   # Which CPU field to scale:
@@ -231,7 +233,7 @@ The service only logs meaningful events. Per-poll status checks are intentionall
 | `INFO` | DB opened (new or existing) |
 | `INFO` | Boost applied (vmid, resource, original → new value, factor) |
 | `INFO` | Boost reverted — normal (usage returned to pre-boost levels) |
-| `INFO` | Boost reverted — still elevated (timer expired, usage still high) |
+| `INFO` | Boost retained — usage not stable enough to downscale |
 | `INFO` | Boost state resumed from DB on startup |
 | `INFO` | Boost state cleared — reverted externally while service was down |
 | `INFO` | Email sent |

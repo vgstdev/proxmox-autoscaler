@@ -25,6 +25,7 @@ const (
 type ResourceState struct {
 	Phase             boostPhase
 	SaturatedCount    int       // consecutive saturated polls
+	DownscaleCount    int       // consecutive polls below the downscale threshold while boosted
 	OriginalValue     float64   // value before boost
 	BoostedValue      float64   // value after boost
 	BoostFactor       float64   // factor applied (1.5 or 1.25)
@@ -32,6 +33,7 @@ type ResourceState struct {
 	UsageHistory      []float64 // rolling history of usage fractions (most recent last)
 	PreBoostAvg       float64   // average usage before saturation kicked in
 	warnedUnlimited   bool      // whether we already warned about cpulimit=0
+	downscaleDeferred bool      // whether we've already logged that a revert was deferred
 }
 
 // ContainerState holds the per-resource states for a container.
@@ -63,4 +65,37 @@ func (rs *ResourceState) computePreBoostAvg(consecutiveSaturated int) float64 {
 		sum += v
 	}
 	return sum / float64(len(slice))
+}
+
+// observeBoostedUsage tracks whether usage has stayed low enough to allow a downscale.
+// The threshold is strict: usage must be lower than the configured value.
+func (rs *ResourceState) observeBoostedUsage(usage, threshold float64) {
+	if usage < threshold {
+		rs.DownscaleCount++
+		return
+	}
+
+	rs.DownscaleCount = 0
+	rs.downscaleDeferred = false
+}
+
+// canDownscale reports whether the boost has lasted long enough and usage has
+// remained below the downscale threshold for the required number of polls.
+func (rs *ResourceState) canDownscale(now time.Time, minBoostDuration time.Duration, requiredSamples int) bool {
+	if now.Sub(rs.BoostedAt) < minBoostDuration {
+		return false
+	}
+	return rs.DownscaleCount >= requiredSamples
+}
+
+// clearBoostState resets transient boost tracking while keeping usage history.
+func (rs *ResourceState) clearBoostState() {
+	rs.Phase = phaseNormal
+	rs.SaturatedCount = 0
+	rs.DownscaleCount = 0
+	rs.BoostedValue = 0
+	rs.BoostFactor = 0
+	rs.BoostedAt = time.Time{}
+	rs.PreBoostAvg = 0
+	rs.downscaleDeferred = false
 }

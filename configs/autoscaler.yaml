@@ -8,7 +8,9 @@ proxmox:
 monitor:
   poll_interval: 5s
   saturation_threshold: 0.95
+  downscale_threshold: 0.80
   consecutive_samples: 3
+  downscale_consecutive_samples: 6
   boost_duration: 2m
   history_samples: 10
 
