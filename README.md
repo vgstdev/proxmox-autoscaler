@@ -249,7 +249,7 @@ The service only logs meaningful events. Per-poll status checks are intentionall
 ### Example output
 
 ```
-time=2026-03-27T14:30:00Z level=INFO msg="service started" version=1.0.0 node=pve poll_interval=5s
+time=2026-03-27T14:30:00Z level=INFO msg="service started" version=1.0.9 node=pve poll_interval=5s
 time=2026-03-27T14:30:00Z level=INFO msg="DB opened" path=/var/lib/proxmox-autoscaler/state.db status=existing
 time=2026-03-27T14:30:00Z level=INFO msg="boost state resumed from DB on startup" vmid=102 resource=cpu original=4 boosted=6 remaining_seconds=73
 time=2026-03-27T14:31:13Z level=INFO msg="boost reverted - normal" vmid=102 resource=cpu boosted_value=6 original_value=4 current_usage_pct=38.2
