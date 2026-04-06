@@ -136,7 +136,18 @@ make build-linux
 3. **Uncheck** "Privilege Separation" so the token inherits the user's permissions
 4. Copy the displayed secret — it is only shown once
 
-The resulting `token_id` value will be `root@pam!autoscaler`.
+### Principle of least privilege
+The autoscaler **does not need** administrator permissions. Based on the Proxmox API endpoints used by this project, the minimum privilege set is:
+
+- `Sys.Audit` — read node status for host-level CPU and memory checks
+- `VM.Audit` — read container lists, runtime status, and current config
+- `VM.Config.CPU` — change CPU settings (`cores` or `cpulimit`)
+- `VM.Config.Memory` — change container memory
+- `VM.Config.Options` — add/remove the `boosted` tag on the container
+
+You can create a custom role with these permissions and assign it to the autoscaler user.
+
+**Recommended setup**: create a dedicated service user and a privilege-separated token with only those permissions instead of using `root@pam`.
 
 ## Configuration
 
@@ -146,7 +157,7 @@ The default config path is `/etc/proxmox-autoscaler/autoscaler.yaml`. Override i
 proxmox:
   host: "https://192.168.1.10:8006"   # Proxmox host URL
   node: "pve"                          # Node name as shown in the UI
-  token_id: "root@pam!autoscaler"      # user@realm!token-name
+  token_id: "autoscaler@pve!autoscaler" # user@realm!token-name
   token_secret: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
   insecure_tls: false                  # Set true for self-signed certificates
 
