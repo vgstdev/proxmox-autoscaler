@@ -52,6 +52,10 @@ func (s *Scaler) ComputeBoost(ctx context.Context, vmid int, kind string, curren
 
 	var totalAlloc float64
 	for _, entry := range allLXC {
+		if entry.Type != "lxc" || entry.Status != "running" {
+			continue
+		}
+
 		cfg, err := s.client.GetContainerConfig(ctx, entry.VMID)
 		if err != nil {
 			s.logger.Debug("capacity check: skipping container (config error)", "vmid", entry.VMID, "error", err)
@@ -96,7 +100,7 @@ func (s *Scaler) ComputeBoost(ctx context.Context, vmid int, kind string, curren
 		}
 	}
 
-	return 0, 0, fmt.Errorf("no boost factor fits within host memory capacity (host_max=%.0fMB, total_alloc=%.0fMB, current=%.0fMB, headroom=%.0fMB)",
+	return 0, 0, fmt.Errorf("no boost factor fits within host memory capacity for running containers (host_max=%.0fMB, total_alloc=%.0fMB, current=%.0fMB, headroom=%.0fMB)",
 		hostMax, totalAlloc, currentValue, headroom)
 }
 
