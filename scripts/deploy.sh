@@ -5,7 +5,7 @@
 # Proxmox Autoscaler — deployment script
 # Usage:
 #   ./deploy.sh            Install or update to the latest release
-#   ./deploy.sh v1.2.0     Install or update to a specific version
+#   ./deploy.sh v1.0.11    Install or update to a specific version
 #   ./deploy.sh --uninstall
 
 set -euo pipefail
@@ -270,7 +270,7 @@ main() {
     --help|-h)
       echo "Usage:"
       echo "  $0                   Install or update to the latest release"
-      echo "  $0 v1.2.0            Install or update to a specific version"
+      echo "  $0 v1.0.11           Install or update to a specific version"
       echo "  $0 --force           Reinstall current version"
       echo "  $0 --uninstall       Remove the service and binary"
       ;;

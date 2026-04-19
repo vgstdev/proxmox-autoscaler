@@ -13,7 +13,7 @@ Because it operates entirely through the Proxmox REST API, it can run directly o
 
 - **Independent per-resource scaling** — CPU and RAM are monitored and scaled independently
 - **Temporary boosts with downscale hysteresis** — resources are increased for a configurable duration (default 2 minutes) and reverted only after sustained usage below the downscale threshold
-- **Graceful fallback** — tries +50% first; falls back to +25% if host capacity is insufficient; skips if neither fits
+- **Graceful fallback** — tries +50% first; falls back to +25% if real host headroom below the configured threshold is insufficient; skips if neither fits
 - **Persistent state** — boost state survives service restarts via SQLite; on startup the service reconciles live Proxmox config against stored state
 - **Manual change detection** — if an administrator changes a container's resources from the Proxmox UI while a boost is active, the service detects the discrepancy and adopts the new value as the baseline without overwriting it
 - **Email and Slack notifications** — sends alerts on boost and revert via email (system mail utility) and/or Slack (Bot API), in English or Spanish
@@ -40,7 +40,7 @@ Every 5 seconds (configurable):
     RAM saturation  = mem_used / mem_total    ≥ 95%
 
     If saturated for 3 consecutive polls (15 s):
-      → Try to apply +50% boost (capped by available host capacity)
+      → Try to apply +50% boost
       → Fall back to +25% if +50% doesn't fit
       → Skip with a warning if neither fits
 
@@ -51,6 +51,8 @@ Every 5 seconds (configurable):
       → If usage is still too high: keep the boost and check again on the next cycle
       → Log and email only when the revert actually happens
 ```
+
+For memory boosts, configured LXC memory overcommit is allowed and expected. Capacity checks are based on the node's real memory usage and the remaining headroom below `scaling.host_memory_max_threshold`, not on the sum of configured container memory.
 
 ## Installation
 
@@ -64,7 +66,7 @@ curl -fsSL https://raw.githubusercontent.com/vgstdev/proxmox-autoscaler/main/scr
 
 # Or clone first and run locally
 sudo ./scripts/deploy.sh             # install latest release
-sudo ./scripts/deploy.sh v1.2.0      # install specific version
+sudo ./scripts/deploy.sh v1.0.11     # install specific version
 sudo ./scripts/deploy.sh --force     # reinstall current version
 sudo ./scripts/deploy.sh --uninstall # remove everything
 ```
@@ -176,10 +178,10 @@ scaling:
   #   "cpulimit" — CPU throttle in core-fractions (float, e.g. 2.5). Use when cpulimit > 0.
   cpu_resource: "cores"
   primary_boost_factor: 1.5    # First attempt: +50%
-  fallback_boost_factor: 1.25  # Second attempt if host has insufficient capacity: +25%
+  fallback_boost_factor: 1.25  # Second attempt if real host headroom is insufficient: +25%
   exclude_tag: "noautoscale"   # LXC containers with this tag are never scaled
   host_cpu_max_threshold: 0.9    # Skip CPU boost if host CPU usage >= 90%
-  host_memory_max_threshold: 0.9 # Skip memory boost if host memory usage >= 90%
+  host_memory_max_threshold: 0.9 # Memory boosts must stay below 90% real host memory usage
 
 notifications:
   email:
@@ -248,7 +250,7 @@ The service only logs meaningful events. Per-poll status checks are intentionall
 | `INFO` | Boost state resumed from DB on startup |
 | `INFO` | Boost state cleared — reverted externally while service was down |
 | `INFO` | Email sent |
-| `WARN` | Boost impossible — host saturated or insufficient capacity |
+| `WARN` | Boost impossible — host saturated or insufficient real headroom below threshold |
 | `WARN` | Manual change detected — adopting new value as baseline |
 | `WARN` | Email send failed |
 | `WARN` | Container skipped — excluded by tag |
@@ -260,7 +262,7 @@ The service only logs meaningful events. Per-poll status checks are intentionall
 ### Example output
 
 ```
-time=2026-03-27T14:30:00Z level=INFO msg="service started" version=1.0.9 node=pve poll_interval=5s
+time=2026-03-27T14:30:00Z level=INFO msg="service started" version=1.0.11 node=pve poll_interval=5s
 time=2026-03-27T14:30:00Z level=INFO msg="DB opened" path=/var/lib/proxmox-autoscaler/state.db status=existing
 time=2026-03-27T14:30:00Z level=INFO msg="boost state resumed from DB on startup" vmid=102 resource=cpu original=4 boosted=6 remaining_seconds=73
 time=2026-03-27T14:31:13Z level=INFO msg="boost reverted - normal" vmid=102 resource=cpu boosted_value=6 original_value=4 current_usage_pct=38.2

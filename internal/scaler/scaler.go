@@ -33,7 +33,7 @@ func New(client *proxmox.Client, cfg *config.Config, logger *slog.Logger) *Scale
 // uses the CFS scheduler and allows overprovisioning by design. However, if the
 // host itself is saturated above host_cpu_max_threshold, the boost is skipped —
 // there is no spare CPU time to redistribute.
-func (s *Scaler) ComputeBoost(ctx context.Context, vmid int, kind string, currentValue float64, nodeStatus *proxmox.NodeStatus) (float64, float64, error) {
+func (s *Scaler) ComputeBoost(_ context.Context, vmid int, kind string, currentValue float64, nodeStatus *proxmox.NodeStatus) (float64, float64, error) {
 	// Check host-level saturation regardless of resource type.
 	if kind == "cpu" {
 		if nodeStatus.CPU >= s.cfg.Scaling.HostCPUMaxThreshold {
@@ -45,41 +45,29 @@ func (s *Scaler) ComputeBoost(ctx context.Context, vmid int, kind string, curren
 		return candidate, s.cfg.Scaling.PrimaryBoostFactor, nil
 	}
 
-	allLXC, err := s.client.ListAllLXC(ctx)
-	if err != nil {
-		return 0, 0, fmt.Errorf("list all lxc: %w", err)
+	hostMaxBytes := nodeStatus.MaxMemBytes()
+	if hostMaxBytes <= 0 {
+		return 0, 0, fmt.Errorf("host memory total unavailable")
 	}
 
-	var totalAlloc float64
-	for _, entry := range allLXC {
-		if entry.Type != "lxc" || entry.Status != "running" {
-			continue
-		}
-
-		cfg, err := s.client.GetContainerConfig(ctx, entry.VMID)
-		if err != nil {
-			s.logger.Debug("capacity check: skipping container (config error)", "vmid", entry.VMID, "error", err)
-			continue
-		}
-		s.logger.Debug("capacity check: container allocation", "vmid", entry.VMID, "kind", kind, "alloc_mb", cfg.Memory)
-		totalAlloc += float64(cfg.Memory)
-	}
-
-	// Check host-level memory saturation before computing headroom.
 	hostMemUsed := nodeStatus.Memory.Used / (1024 * 1024)
-	hostMax := nodeStatus.MaxMemBytes() / (1024 * 1024)
-	hostMemFraction := nodeStatus.Memory.Used / nodeStatus.MaxMemBytes()
+	hostMax := hostMaxBytes / (1024 * 1024)
+	hostMemFraction := nodeStatus.Memory.Used / hostMaxBytes
 	if hostMemFraction >= s.cfg.Scaling.HostMemoryMaxThreshold {
-		return 0, 0, fmt.Errorf("host memory saturated (%.0f%% >= threshold %.0f%%) — host_used=%.0fMB host_max=%.0fMB",
-			hostMemFraction*100, s.cfg.Scaling.HostMemoryMaxThreshold*100, hostMemUsed, hostMax)
+		return 0, 0, fmt.Errorf("host memory saturated (%.0f%% >= threshold %.0f%%) — host_used=%.0fMB host_limit=%.0fMB host_max=%.0fMB",
+			hostMemFraction*100, s.cfg.Scaling.HostMemoryMaxThreshold*100, hostMemUsed, hostMax*s.cfg.Scaling.HostMemoryMaxThreshold, hostMax)
 	}
 
-	headroom := hostMax - totalAlloc + currentValue
+	// Overcommit is normal in Proxmox, so base capacity on real host usage.
+	// The boost delta is treated conservatively as potential extra demand.
+	hostLimit := hostMax * s.cfg.Scaling.HostMemoryMaxThreshold
+	headroom := hostLimit - hostMemUsed
 
 	s.logger.Debug("capacity check summary",
 		"vmid", vmid,
+		"host_used_mb", fmt.Sprintf("%.0f", hostMemUsed),
+		"host_limit_mb", fmt.Sprintf("%.0f", hostLimit),
 		"host_max_mb", fmt.Sprintf("%.0f", hostMax),
-		"total_alloc_mb", fmt.Sprintf("%.0f", totalAlloc),
 		"current_mb", fmt.Sprintf("%.0f", currentValue),
 		"headroom_mb", fmt.Sprintf("%.0f", headroom),
 	)
@@ -100,8 +88,8 @@ func (s *Scaler) ComputeBoost(ctx context.Context, vmid int, kind string, curren
 		}
 	}
 
-	return 0, 0, fmt.Errorf("no boost factor fits within host memory capacity for running containers (host_max=%.0fMB, total_alloc=%.0fMB, current=%.0fMB, headroom=%.0fMB)",
-		hostMax, totalAlloc, currentValue, headroom)
+	return 0, 0, fmt.Errorf("no boost factor fits within real host memory headroom below threshold (host_used=%.0fMB, host_limit=%.0fMB, host_max=%.0fMB, current=%.0fMB, headroom=%.0fMB)",
+		hostMemUsed, hostLimit, hostMax, currentValue, headroom)
 }
 
 // ApplyBoost sends the boosted value to Proxmox.
